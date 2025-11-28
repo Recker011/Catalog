@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CAT-alog</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div id="home-button" class="sidebar-icon active">🏠</div>
+    </aside>
+
+    <main class="main">
+      <header class="top-bar">
+        <h1 class="logo">CAT-alog</h1>
+        <div class="search-wrapper">
+          <input
+            id="search-input"
+            class="search-input"
+            type="text"
+            placeholder="Search movies, TV shows, people..."
+            autocomplete="off"
+          />
+          <div id="search-results" class="search-results hidden"></div>
+        </div>
+      </header>
+
+      <section id="home-view" class="rows">
+        <section class="row" id="popular-movies">
+          <div class="row-header">
+            <h2>Popular Movies</h2>
+          </div>
+          <div class="cards" data-row="popular-movies"></div>
+        </section>
+
+        <section class="row" id="popular-tv">
+          <div class="row-header">
+            <h2>Popular TV Series</h2>
+          </div>
+          <div class="cards" data-row="popular-tv"></div>
+        </section>
+
+        <section class="row" id="featured-movies">
+          <div class="row-header">
+            <h2>Featured Movies</h2>
+          </div>
+          <div class="cards" data-row="featured-movies"></div>
+        </section>
+
+        <section class="row" id="featured-tv">
+          <div class="row-header">
+            <h2>Featured Series</h2>
+          </div>
+          <div class="cards" data-row="featured-tv"></div>
+        </section>
+      </section>
+
+      <section id="detail-view" class="detail-view hidden"></section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
