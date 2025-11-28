@@ -163,6 +163,12 @@ app.use((_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
-});
+if (process.env.VERCEL) {
+  // Vercel will handle creating the HTTP server and passing requests to this Express app.
+  module.exports = app;
+} else {
+  // Local development: start the server normally.
+  app.listen(PORT, () => {
+    console.log(`Server listening on http://localhost:${PORT}`);
+  });
+}
