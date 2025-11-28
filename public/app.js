@@ -19,7 +19,268 @@ async function fetchJson(url) {
   return response.json();
 }
 
-// DOM references
+ // --- Streaming proxy integration (v2) ---
+
+const PROXY_DEFAULT_BASE = 'http://localhost:4000';
+const PROVIDER_STORAGE_KEY = 'catalog:streamProvider';
+
+/**
+ * Resolve the base URL for the streaming proxy (VidLink / Filmex).
+ * This will prefer window.VIDLINK_PROXY_BASE if present so that
+ * deployments can override it without rebuilding the bundle.
+ */
+function getProxyBase() {
+  if (typeof window !== 'undefined' && window.VIDLINK_PROXY_BASE) {
+    return window.VIDLINK_PROXY_BASE;
+  }
+  return PROXY_DEFAULT_BASE;
+}
+
+/**
+ * Determine the initial provider to use, preferring a stored choice.
+ */
+function getInitialProvider() {
+  if (typeof window === 'undefined') return 'vidlink';
+  try {
+    const stored =
+      window.localStorage && window.localStorage.getItem(PROVIDER_STORAGE_KEY);
+    if (stored === 'filmex' || stored === 'vidlink') {
+      return stored;
+    }
+  } catch (error) {
+    console.warn('Unable to read provider preference from storage', error);
+  }
+  return 'vidlink';
+}
+
+let currentProvider = getInitialProvider();
+let currentHlsInstance = null;
+
+/**
+ * Get the active provider name.
+ */
+function getCurrentProvider() {
+  return currentProvider || 'vidlink';
+}
+
+/**
+ * Update the active provider and persist the choice where possible.
+ */
+function setCurrentProvider(provider) {
+  if (provider !== 'vidlink' && provider !== 'filmex') {
+    provider = 'vidlink';
+  }
+  currentProvider = provider;
+
+  if (typeof window !== 'undefined') {
+    try {
+      if (window.localStorage) {
+        window.localStorage.setItem(PROVIDER_STORAGE_KEY, provider);
+      }
+    } catch (error) {
+      console.warn('Unable to persist provider preference', error);
+    }
+  }
+}
+
+/**
+ * Clean up any existing Hls.js instance before starting a new stream.
+ */
+function cleanupHls() {
+  if (currentHlsInstance && typeof currentHlsInstance.destroy === 'function') {
+    try {
+      currentHlsInstance.destroy();
+    } catch (error) {
+      console.error('Failed to destroy Hls instance', error);
+    }
+  }
+  currentHlsInstance = null;
+}
+
+/**
+ * Resolve a direct stream URL via the /v2/stream endpoint.
+ *
+ * @param {Object} params
+ * @param {'movie'|'tv'} params.type
+ * @param {number|string} [params.tmdbId]
+ * @param {number|string} [params.season]
+ * @param {number|string} [params.episode]
+ * @param {'vidlink'|'filmex'} [params.provider]
+ * @returns {Promise<{ ok: boolean, url: string, format: string, expiresAt: number, fromCache: boolean, provider: string }>}
+ */
+async function fetchStreamUrlV2(params) {
+  const { type, tmdbId, season, episode } = params;
+
+  const search = new URLSearchParams();
+  search.set('type', type);
+
+  const provider = params.provider || getCurrentProvider();
+  if (provider) {
+    search.set('provider', provider);
+  }
+
+  if (type === 'movie') {
+    if (!tmdbId) {
+      throw new Error('tmdbId is required for movie playback.');
+    }
+    search.set('tmdbId', String(tmdbId));
+  } else if (type === 'tv') {
+    if (!tmdbId || !season || !episode) {
+      throw new Error('tmdbId, season and episode are required for TV playback.');
+    }
+    search.set('tmdbId', String(tmdbId));
+    search.set('season', String(season));
+    search.set('episode', String(episode));
+  } else if (type === 'anime') {
+    // Anime resolution exists on the proxy, but this UI does not yet expose anime playback.
+    throw new Error('Anime playback is not wired up in this UI yet.');
+  }
+
+  const endpoint = `${getProxyBase()}/v2/stream?${search.toString()}`;
+
+  let data;
+  try {
+    const res = await fetch(endpoint);
+    data = await res.json();
+  } catch (error) {
+    console.error('Failed to call streaming proxy', error);
+    throw new Error('Failed to contact streaming proxy.');
+  }
+
+  if (!data || !data.ok || !data.url) {
+    console.error('Unexpected proxy response', data);
+    const message =
+      (data && (data.message || data.error)) ||
+      'Streaming is not available for this title right now.';
+    const err = new Error(message);
+    if (data) {
+      err.code = data.error;
+      err.details = data.details;
+    }
+    throw err;
+  }
+
+  return data;
+}
+
+/**
+ * Call the /v2/stream endpoint and attach the resulting HLS stream to the
+ * provided <video> element using Hls.js or native playback.
+ *
+ * @param {Object} params
+ * @param {HTMLVideoElement} videoEl
+ */
+async function loadStreamIntoVideo(params, videoEl) {
+  if (!videoEl) return;
+
+  const provider = params.provider || getCurrentProvider();
+
+  // Reset any existing source when provider or content changes.
+  videoEl.pause();
+  videoEl.removeAttribute('src');
+  videoEl.load();
+
+  const data = await fetchStreamUrlV2({ ...params, provider });
+  const streamUrl = data.url;
+
+  cleanupHls();
+
+  const HlsConstructor = typeof window !== 'undefined' ? window.Hls : null;
+
+  if (HlsConstructor && HlsConstructor.isSupported && HlsConstructor.isSupported()) {
+    const hls = new HlsConstructor();
+    currentHlsInstance = hls;
+    hls.loadSource(streamUrl);
+    hls.attachMedia(videoEl);
+    hls.on(HlsConstructor.Events.MANIFEST_PARSED, () => {
+      videoEl.play().catch(() => {});
+    });
+  } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+    videoEl.src = streamUrl;
+    videoEl.play().catch(() => {});
+  } else {
+    throw new Error('HLS playback is not supported in this browser.');
+  }
+
+  // Track the provider used for this video element.
+  videoEl.dataset.provider = provider;
+}
+
+/**
+ * Convenience wrapper for starting movie playback given a TMDB movie object.
+ */
+async function startMoviePlayback(movie, videoEl, statusEl) {
+  if (!movie || !movie.id) return;
+
+  const providerLabel =
+    getCurrentProvider() === 'filmex' ? 'Filmex' : 'VidLink';
+
+  if (statusEl) {
+    statusEl.textContent = `Resolving stream via ${providerLabel}…`;
+  }
+
+  try {
+    await loadStreamIntoVideo(
+      {
+        type: 'movie',
+        tmdbId: movie.id,
+        provider: getCurrentProvider(),
+      },
+      videoEl
+    );
+    if (statusEl) {
+      statusEl.textContent = '';
+    }
+  } catch (error) {
+    console.error('Failed to start movie playback', error);
+    if (statusEl) {
+      statusEl.textContent =
+        error && error.message
+          ? error.message
+          : 'Failed to start playback.';
+    }
+  }
+}
+
+/**
+ * Convenience wrapper for starting TV episode playback given TV/season/episode info.
+ */
+async function startEpisodePlayback(tv, season, episode, videoEl, statusEl) {
+  if (!tv || !tv.id || !season || !episode) return;
+
+  const providerLabel =
+    getCurrentProvider() === 'filmex' ? 'Filmex' : 'VidLink';
+
+  if (statusEl) {
+    statusEl.textContent = `Resolving stream via ${providerLabel}…`;
+  }
+
+  try {
+    await loadStreamIntoVideo(
+      {
+        type: 'tv',
+        tmdbId: tv.id,
+        season: season.season_number,
+        episode: episode.episode_number,
+        provider: getCurrentProvider(),
+      },
+      videoEl
+    );
+    if (statusEl) {
+      statusEl.textContent = '';
+    }
+  } catch (error) {
+    console.error('Failed to start episode playback', error);
+    if (statusEl) {
+      statusEl.textContent =
+        error && error.message
+          ? error.message
+          : 'Failed to start playback.';
+    }
+  }
+}
+
+ // DOM references
 const homeView = document.getElementById('home-view');
 const detailView = document.getElementById('detail-view');
 const homeButton = document.getElementById('home-button');
@@ -27,13 +288,22 @@ const homeButton = document.getElementById('home-button');
 const searchInput = document.getElementById('search-input');
 const searchResults = document.getElementById('search-results');
 
+const providerToggle = document.getElementById('provider-toggle');
+const providerButtons = providerToggle
+  ? providerToggle.querySelectorAll('.provider-option')
+  : null;
+
 let searchTimeout;
+
+let currentPlayback = null;
 
 function showHome() {
   if (!homeView || !detailView) return;
   homeView.style.display = 'flex';
   detailView.style.display = 'none';
   detailView.innerHTML = '';
+  cleanupHls();
+  currentPlayback = null;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
   if (homeButton) {
@@ -45,6 +315,7 @@ function showDetail() {
   if (!homeView || !detailView) return;
   homeView.style.display = 'none';
   detailView.style.display = 'block';
+  cleanupHls();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
   if (homeButton) {
@@ -289,6 +560,77 @@ function setupSearch() {
   });
 }
 
+/**
+ * Reflect the currently selected provider in the toggle UI.
+ */
+function updateProviderToggleUI() {
+  if (!providerButtons || typeof getCurrentProvider !== 'function') return;
+
+  const active = getCurrentProvider();
+  providerButtons.forEach((btn) => {
+    const provider = btn.dataset.provider;
+    if (!provider) return;
+
+    if (provider === active) {
+      btn.classList.add('active');
+      btn.setAttribute('aria-pressed', 'true');
+    } else {
+      btn.classList.remove('active');
+      btn.setAttribute('aria-pressed', 'false');
+    }
+  });
+}
+
+/**
+ * If a movie or episode is currently being played, re-resolve it with
+ * the newly selected provider.
+ */
+async function replayCurrentPlayback() {
+  if (!currentPlayback) return;
+
+  const providerLabel =
+    getCurrentProvider() === 'filmex' ? 'Filmex' : 'VidLink';
+
+  const { kind, movie, tv, season, episode, videoEl, statusEl } =
+    currentPlayback;
+
+  if (!videoEl) return;
+
+  if (statusEl) {
+    statusEl.textContent = `Resolving stream via ${providerLabel}…`;
+  }
+
+  try {
+    if (kind === 'movie' && movie) {
+      await startMoviePlayback(movie, videoEl, statusEl);
+    } else if (kind === 'tv' && tv && season && episode) {
+      await startEpisodePlayback(tv, season, episode, videoEl, statusEl);
+    }
+  } catch (error) {
+    console.error('Failed to re-resolve stream after provider change', error);
+  }
+}
+
+/**
+ * Wire up the provider toggle so the user can switch between VidLink and Filmex.
+ */
+function setupProviderToggle() {
+  if (!providerToggle || !providerButtons) return;
+
+  updateProviderToggleUI();
+
+  providerButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const provider = btn.dataset.provider;
+      if (!provider) return;
+
+      setCurrentProvider(provider);
+      updateProviderToggleUI();
+      replayCurrentPlayback();
+    });
+  });
+}
+
 // DETAIL VIEWS
 
 function renderBreadcrumb(parts) {
@@ -358,9 +700,41 @@ function renderMovieDetail(movie) {
 
   wrapper.appendChild(header);
 
-  // Add video player for movies
-  const videoPlayer = createVideoPlayer('movie', movie.id);
-  wrapper.appendChild(videoPlayer);
+  // Video player section – resolves a playable HLS stream via the selected provider.
+  const playerSection = document.createElement('section');
+  playerSection.className = 'video-player-section';
+
+  const playerTitle = document.createElement('div');
+  playerTitle.className = 'video-player-title';
+  playerTitle.textContent = 'Watch now';
+
+  const videoEl = document.createElement('video');
+  videoEl.className = 'video-player';
+  videoEl.controls = true;
+  videoEl.playsInline = true;
+
+  const statusEl = document.createElement('p');
+  statusEl.className = 'detail-overview';
+  const initialProviderLabel =
+    getCurrentProvider() === 'filmex' ? 'Filmex' : 'VidLink';
+  statusEl.textContent = `Resolving stream via ${initialProviderLabel}…`;
+
+  playerSection.appendChild(playerTitle);
+  playerSection.appendChild(videoEl);
+  playerSection.appendChild(statusEl);
+
+  wrapper.appendChild(playerSection);
+
+  // Track active playback context for provider switching.
+  currentPlayback = {
+    kind: 'movie',
+    movie,
+    videoEl,
+    statusEl,
+  };
+
+  // Kick off playback for this movie.
+  startMoviePlayback(movie, videoEl, statusEl);
 
   const cast = movie.credits && Array.isArray(movie.credits.cast)
     ? movie.credits.cast.slice(0, 8)
@@ -435,6 +809,7 @@ function renderTvSeasons(tv) {
   if (!detailView) return;
   showDetail();
   detailView.innerHTML = '';
+  currentPlayback = null;
 
   const wrapper = document.createElement('section');
   wrapper.className = 'detail-wrapper';
@@ -525,6 +900,7 @@ function renderSeasonEpisodes(tv, season) {
   if (!detailView) return;
   showDetail();
   detailView.innerHTML = '';
+  currentPlayback = null;
 
   const wrapper = document.createElement('section');
   wrapper.className = 'detail-wrapper';
@@ -605,48 +981,6 @@ async function openSeason(tvId, seasonNumber, tv) {
   }
 }
 
-function createVideoPlayer(type, tmdbId, season, episode) {
-  const playerSection = document.createElement('section');
-  playerSection.className = 'video-player-section';
-
-  const playerTitle = document.createElement('h3');
-  playerTitle.className = 'video-player-title';
-  playerTitle.textContent = 'Watch Now';
-  playerSection.appendChild(playerTitle);
-
-  const iframe = document.createElement('iframe');
-  iframe.className = 'video-player';
-  
-  // Build the base URL
-  let baseUrl;
-  if (type === 'movie') {
-    baseUrl = `https://vidlink.pro/movie/${tmdbId}`;
-  } else if (type === 'episode') {
-    baseUrl = `https://vidlink.pro/tv/${tmdbId}/${season}/${episode}`;
-  }
-
-  // Add customization parameters for optimal user experience
-  const params = new URLSearchParams({
-    primaryColor: 'B20710',      // Red color matching the theme
-    secondaryColor: '170000',    // Dark red for progress bar
-    icons: 'vid',                // Custom VidLink icons
-    iconColor: 'B20710',         // Match primary color
-    title: 'false',              // Hide title since we have our own
-    poster: 'true',              // Show poster
-    autoplay: 'false',           // Don't autoplay
-    nextbutton: 'true',          // Show next episode button for TV shows
-    player: 'jw'                 // Use JWPlayer for better compatibility
-  });
-
-  iframe.src = `${baseUrl}?${params.toString()}`;
-  iframe.setAttribute('frameborder', '0');
-  iframe.setAttribute('allowfullscreen', '');
-  iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
-  
-  playerSection.appendChild(iframe);
-  return playerSection;
-}
-
 function renderEpisodeDetail(tv, season, episode) {
   if (!detailView) return;
   showDetail();
@@ -724,9 +1058,43 @@ function renderEpisodeDetail(tv, season, episode) {
 
   wrapper.appendChild(header);
 
-  // Add video player for TV show episodes
-  const videoPlayer = createVideoPlayer('episode', tv.id, season.season_number, episode.episode_number);
-  wrapper.appendChild(videoPlayer);
+    // Video player section – resolves a playable HLS stream for this episode.
+    const playerSection = document.createElement('section');
+    playerSection.className = 'video-player-section';
+
+  const playerTitle = document.createElement('div');
+  playerTitle.className = 'video-player-title';
+  playerTitle.textContent = 'Watch episode';
+
+  const videoEl = document.createElement('video');
+  videoEl.className = 'video-player';
+  videoEl.controls = true;
+  videoEl.playsInline = true;
+
+  const statusEl = document.createElement('p');
+  statusEl.className = 'detail-overview';
+  const initialProviderLabel =
+    getCurrentProvider() === 'filmex' ? 'Filmex' : 'VidLink';
+  statusEl.textContent = `Resolving stream via ${initialProviderLabel}…`;
+
+  playerSection.appendChild(playerTitle);
+  playerSection.appendChild(videoEl);
+  playerSection.appendChild(statusEl);
+
+  wrapper.appendChild(playerSection);
+
+  // Track active playback context for provider switching.
+  currentPlayback = {
+    kind: 'tv',
+    tv,
+    season,
+    episode,
+    videoEl,
+    statusEl,
+  };
+
+  // Kick off playback for this TV episode.
+  startEpisodePlayback(tv, season, episode, videoEl, statusEl);
 
   const credits =
     episode.credits && Array.isArray(episode.credits.cast)
@@ -787,5 +1155,6 @@ window.addEventListener('DOMContentLoaded', () => {
   showHome();
   initRows().catch((err) => console.error(err));
   setupSearch();
+  setupProviderToggle();
   setupHomeButton();
 });

@@ -25,6 +25,22 @@
           />
           <div id="search-results" class="search-results hidden"></div>
         </div>
+        <div id="provider-toggle" class="provider-toggle" aria-label="Streaming provider">
+          <button
+            type="button"
+            class="provider-option"
+            data-provider="vidlink"
+          >
+            VidLink
+          </button>
+          <button
+            type="button"
+            class="provider-option"
+            data-provider="filmex"
+          >
+            Filmex
+          </button>
+        </div>
       </header>
 
       <section id="home-view" class="rows">
@@ -61,6 +77,12 @@
     </main>
   </div>
 
+  <script>
+    // Base URL for the VidLink proxy. In development this defaults to localhost:4000,
+    // but you can override by setting window.VIDLINK_PROXY_BASE before this script runs.
+    window.VIDLINK_PROXY_BASE = window.VIDLINK_PROXY_BASE || 'http://localhost:4000';
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
