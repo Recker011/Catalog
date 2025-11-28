@@ -625,14 +625,17 @@ function createVideoPlayer(type, tmdbId, season, episode) {
     baseUrl = `https://vidlink.pro/tv/${tmdbId}/${season}/${episode}`;
   }
 
-  // Simplified parameters to avoid common blocking issues
+  // Add customization parameters for optimal user experience
   const params = new URLSearchParams({
     primaryColor: 'B20710',      // Red color matching the theme
     secondaryColor: '170000',    // Dark red for progress bar
-    icons: 'default',            // Use default icons to avoid conflicts
+    icons: 'vid',                // Custom VidLink icons
+    iconColor: 'B20710',         // Match primary color
     title: 'false',              // Hide title since we have our own
+    poster: 'true',              // Show poster
     autoplay: 'false',           // Don't autoplay
-    nextbutton: 'true'           // Show next episode button for TV shows
+    nextbutton: 'true',          // Show next episode button for TV shows
+    player: 'jw'                 // Use JWPlayer for better compatibility
   });
 
   iframe.src = `${baseUrl}?${params.toString()}`;
@@ -640,60 +643,7 @@ function createVideoPlayer(type, tmdbId, season, episode) {
   iframe.setAttribute('allowfullscreen', '');
   iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
   
-  // Add error handling for better user experience
-  let hasError = false;
-  iframe.onerror = function() {
-    if (hasError) return; // Prevent multiple error handlers
-    hasError = true;
-    
-    // Create error message
-    const errorContainer = document.createElement('div');
-    errorContainer.className = 'player-error-container';
-    
-    const errorMessage = document.createElement('div');
-    errorMessage.className = 'player-error-message';
-    errorMessage.innerHTML = `
-      <h4>Video Player Issue</h4>
-      <p>The video player encountered loading issues. This can be caused by:</p>
-      <ul>
-        <li>Ad blockers or security extensions</li>
-        <li>Network restrictions</li>
-        <li>Browser compatibility</li>
-      </ul>
-      <p>Try refreshing the page or <a href="${baseUrl}" target="_blank" rel="noopener">watch on VidLink directly</a></p>
-      <button onclick="location.reload()" class="retry-button">Retry</button>
-    `;
-    
-    errorContainer.appendChild(errorMessage);
-    
-    // Replace iframe with error message
-    playerSection.innerHTML = '';
-    playerSection.appendChild(playerTitle);
-    playerSection.appendChild(errorContainer);
-  };
-  
-  // Add loading timeout
-  const loadingTimeout = setTimeout(() => {
-    if (!hasError) {
-      console.warn('Video player is taking longer than expected to load');
-    }
-  }, 10000); // 10 second timeout
-  
-  iframe.onload = function() {
-    clearTimeout(loadingTimeout);
-  };
-  
   playerSection.appendChild(iframe);
-  
-  // Add fallback link
-  const fallbackLink = document.createElement('a');
-  fallbackLink.href = baseUrl;
-  fallbackLink.target = '_blank';
-  fallbackLink.rel = 'noopener';
-  fallbackLink.className = 'fallback-watch-link';
-  fallbackLink.textContent = 'Alternative: Watch on VidLink';
-  playerSection.appendChild(fallbackLink);
-  
   return playerSection;
 }
 

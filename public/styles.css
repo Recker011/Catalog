@@ -513,89 +513,9 @@ body {
   box-shadow: 0 8px 25px rgba(15, 23, 42, 0.7);
 }
 
-.fallback-watch-link {
-  display: block;
-  text-align: center;
-  margin-top: 8px;
-  padding: 8px 16px;
-  background: rgba(79, 70, 229, 0.8);
-  color: #ffffff;
-  text-decoration: none;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  transition: background 0.2s ease;
-}
-
-.fallback-watch-link:hover {
-  background: rgba(79, 70, 229, 1);
-}
-
-.player-error-container {
-  background: rgba(15, 23, 42, 0.95);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 12px;
-  padding: 20px;
-  text-align: center;
-}
-
-.player-error-message h4 {
-  color: #fca5a5;
-  margin-bottom: 12px;
-  font-size: 16px;
-}
-
-.player-error-message p {
-  color: #d1d5db;
-  font-size: 13px;
-  line-height: 1.5;
-  margin-bottom: 8px;
-}
-
-.player-error-message ul {
-  text-align: left;
-  color: #d1d5db;
-  font-size: 13px;
-  margin: 12px 0;
-  padding-left: 20px;
-}
-
-.player-error-message li {
-  margin-bottom: 4px;
-}
-
-.player-error-message a {
-  color: #60a5fa;
-  text-decoration: none;
-}
-
-.player-error-message a:hover {
-  text-decoration: underline;
-}
-
-.retry-button {
-  margin-top: 12px;
-  padding: 8px 16px;
-  background: rgba(79, 70, 229, 0.8);
-  color: #ffffff;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.retry-button:hover {
-  background: rgba(79, 70, 229, 1);
-}
-
 @media (max-width: 768px) {
   .video-player {
     height: 320px;
-  }
-  
-  .player-error-container {
-    padding: 16px;
   }
 }
 
