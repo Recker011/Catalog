@@ -1,0 +1,1 @@
+{"version": 2, "builds": [{"src": "server.js", "use": "@vercel/node"}], "routes": [{"src": "/(.*)", "dest": "/server.js"}], "env": {"TMDB_API_KEY": "@tmdb_api_key", "TMDB_READ_TOKEN": "@tmdb_read_token"}}
