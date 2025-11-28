@@ -639,16 +639,6 @@ function createVideoPlayer(type, tmdbId, season, episode) {
   iframe.setAttribute('frameborder', '0');
   iframe.setAttribute('allowfullscreen', '');
   iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
-  // Sandbox to keep the player from opening popups or redirecting the top window
-  iframe.setAttribute(
-    'sandbox',
-    [
-      'allow-scripts',      // let their JS run
-      'allow-same-origin',  // needed for most modern players
-      'allow-presentation'  // allow fullscreen-like presentation
-      // NOTE: we deliberately do NOT add allow-popups or allow-top-navigation
-    ].join(' ')
-  );
   
   // Add error handling for better user experience
   let hasError = false;
