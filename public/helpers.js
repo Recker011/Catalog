@@ -75,6 +75,26 @@ function createCard(item, typeHint) {
   card.appendChild(titleEl);
   card.appendChild(subtitleEl);
 
+  // Add click handler with loading state
+  card.addEventListener('click', function() {
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.setCardLoading(card);
+      
+      // Show loading toast for navigation
+      window.LoadingUtils.showToast(
+        `Opening ${name}...`,
+        'loading',
+        0,
+        true
+      );
+      
+      // Remove loading state after a short delay to prevent UI freezing
+      setTimeout(() => {
+        window.LoadingUtils.removeCardLoading(card);
+      }, 500);
+    }
+  });
+
   return card;
 }
 

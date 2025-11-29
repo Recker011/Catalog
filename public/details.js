@@ -4,14 +4,22 @@ const homeView = document.getElementById('home-view');
 const detailView = document.getElementById('detail-view');
 const homeButton = document.getElementById('home-button');
 
+const cricketView = document.getElementById('cricket-view');
+const cricketButton = document.getElementById('cricket-button');
+
 /**
  * Show the home grid and hide any active detail view.
  */
 function showHome() {
   if (!homeView || !detailView) return;
+
   homeView.style.display = 'flex';
   detailView.style.display = 'none';
   detailView.innerHTML = '';
+
+  if (cricketView) {
+    cricketView.style.display = 'none';
+  }
 
   if (typeof cleanupHls === 'function') {
     cleanupHls();
@@ -23,6 +31,9 @@ function showHome() {
   if (homeButton) {
     homeButton.classList.add('active');
   }
+  if (cricketButton) {
+    cricketButton.classList.remove('active');
+  }
 }
 
 /**
@@ -30,8 +41,13 @@ function showHome() {
  */
 function showDetail() {
   if (!homeView || !detailView) return;
+
   homeView.style.display = 'none';
   detailView.style.display = 'block';
+
+  if (cricketView) {
+    cricketView.style.display = 'none';
+  }
 
   if (typeof cleanupHls === 'function') {
     cleanupHls();
@@ -41,6 +57,9 @@ function showDetail() {
 
   if (homeButton) {
     homeButton.classList.remove('active');
+  }
+  if (cricketButton) {
+    cricketButton.classList.remove('active');
   }
 }
 
@@ -213,11 +232,41 @@ function renderMovieDetail(movie) {
  * Fetch and open a movie detail page.
  */
 async function openMovie(id) {
+  // Show loading toast for movie details
+  if (typeof window.LoadingUtils !== 'undefined') {
+    window.LoadingUtils.showToast(
+      'Loading movie details...',
+      'loading',
+      0,
+      true
+    );
+  }
+  
   try {
     const movie = await fetchJson(`/api/movie/${id}`);
     renderMovieDetail(movie);
+    
+    // Hide loading toast and show success
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.hideAllToasts('loading');
+      window.LoadingUtils.showToast(
+        `Loaded "${movie.title}"`,
+        'success',
+        2000
+      );
+    }
   } catch (error) {
     console.error('Failed to open movie', error);
+    
+    // Hide loading toast and show error
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.hideAllToasts('loading');
+      window.LoadingUtils.showToast(
+        'Failed to load movie details',
+        'error',
+        5000
+      );
+    }
   }
 }
 
@@ -292,9 +341,12 @@ function renderTvSeasons(tv) {
       btn.type = 'button';
       btn.className = 'season-pill';
       btn.textContent = `Season ${season.season_number} (${season.episode_count} eps)`;
-      btn.addEventListener('click', () =>
-        openSeason(tv.id, season.season_number, tv)
-      );
+      btn.addEventListener('click', function() {
+        if (typeof window.LoadingUtils !== 'undefined') {
+          window.LoadingUtils.setButtonLoading(btn, `Season ${season.season_number}`);
+        }
+        openSeason(tv.id, season.season_number, tv);
+      });
       seasonList.appendChild(btn);
     }
 
@@ -306,11 +358,41 @@ function renderTvSeasons(tv) {
 }
 
 async function openTv(id) {
+  // Show loading toast for TV series details
+  if (typeof window.LoadingUtils !== 'undefined') {
+    window.LoadingUtils.showToast(
+      'Loading series details...',
+      'loading',
+      0,
+      true
+    );
+  }
+  
   try {
     const tv = await fetchJson(`/api/tv/${id}`);
     renderTvSeasons(tv);
+    
+    // Hide loading toast and show success
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.hideAllToasts('loading');
+      window.LoadingUtils.showToast(
+        `Loaded "${tv.name}"`,
+        'success',
+        2000
+      );
+    }
   } catch (error) {
     console.error('Failed to open series', error);
+    
+    // Hide loading toast and show error
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.hideAllToasts('loading');
+      window.LoadingUtils.showToast(
+        'Failed to load series details',
+        'error',
+        5000
+      );
+    }
   }
 }
 
@@ -330,7 +412,12 @@ function renderSeasonEpisodes(tv, season) {
   backToSeasons.type = 'button';
   backToSeasons.className = 'back-button';
   backToSeasons.textContent = '← Back to seasons';
-  backToSeasons.addEventListener('click', () => renderTvSeasons(tv));
+  backToSeasons.addEventListener('click', function() {
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.setButtonLoading(backToSeasons, '← Back to seasons');
+    }
+    renderTvSeasons(tv);
+  });
 
   headerRow.appendChild(backToSeasons);
   headerRow.appendChild(renderBreadcrumb([
@@ -391,11 +478,41 @@ function renderSeasonEpisodes(tv, season) {
 }
 
 async function openSeason(tvId, seasonNumber, tv) {
+  // Show loading toast for season details
+  if (typeof window.LoadingUtils !== 'undefined') {
+    window.LoadingUtils.showToast(
+      `Loading Season ${seasonNumber}...`,
+      'loading',
+      0,
+      true
+    );
+  }
+  
   try {
     const season = await fetchJson(`/api/tv/${tvId}/season/${seasonNumber}`);
     renderSeasonEpisodes(tv, season);
+    
+    // Hide loading toast and show success
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.hideAllToasts('loading');
+      window.LoadingUtils.showToast(
+        `Loaded Season ${seasonNumber}`,
+        'success',
+        2000
+      );
+    }
   } catch (error) {
     console.error('Failed to load season', error);
+    
+    // Hide loading toast and show error
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.hideAllToasts('loading');
+      window.LoadingUtils.showToast(
+        'Failed to load season details',
+        'error',
+        5000
+      );
+    }
   }
 }
 
@@ -550,22 +667,97 @@ function renderEpisodeDetail(tv, season, episode) {
 }
 
 async function openEpisode(tvId, seasonNumber, episodeNumber, tv, season) {
+  // Show loading toast for episode details
+  if (typeof window.LoadingUtils !== 'undefined') {
+    window.LoadingUtils.showToast(
+      `Loading episode details...`,
+      'loading',
+      0,
+      true
+    );
+  }
+  
   try {
     const episode = await fetchJson(
       `/api/tv/${tvId}/season/${seasonNumber}/episode/${episodeNumber}`
     );
     renderEpisodeDetail(tv, season, episode);
+    
+    // Hide loading toast and show success
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.hideAllToasts('loading');
+      window.LoadingUtils.showToast(
+        `Loaded episode details`,
+        'success',
+        2000
+      );
+    }
   } catch (error) {
     console.error('Failed to load episode', error);
+    
+    // Hide loading toast and show error
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.hideAllToasts('loading');
+      window.LoadingUtils.showToast(
+        'Failed to load episode details',
+        'error',
+        5000
+      );
+    }
   }
 }
 
 /**
  * Wire up the home button in the sidebar.
  */
+function showCricket() {
+  if (!cricketView || !homeView || !detailView) return;
+
+  homeView.style.display = 'none';
+  detailView.style.display = 'none';
+  cricketView.style.display = 'block';
+
+  if (typeof cleanupHls === 'function') {
+    cleanupHls();
+  }
+
+  window.currentPlayback = null;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  if (homeButton) {
+    homeButton.classList.remove('active');
+  }
+  if (cricketButton) {
+    cricketButton.classList.add('active');
+  }
+
+  // Show loading toast for cricket initialization
+  if (typeof window.LoadingUtils !== 'undefined') {
+    window.LoadingUtils.showToast(
+      'Loading cricket streams...',
+      'loading',
+      0,
+      true
+    );
+  }
+
+  if (typeof window !== 'undefined' && typeof window.cricketEnsureInitialized === 'function') {
+    window.cricketEnsureInitialized();
+  }
+}
+
+/**
+ * Wire up the home and cricket buttons in the sidebar.
+ */
 function setupHomeButton() {
-  if (!homeButton) return;
-  homeButton.addEventListener('click', () => {
-    showHome();
-  });
+  if (homeButton) {
+    homeButton.addEventListener('click', () => {
+      showHome();
+    });
+  }
+  if (cricketButton) {
+    cricketButton.addEventListener('click', () => {
+      showCricket();
+    });
+  }
 }

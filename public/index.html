@@ -9,7 +9,8 @@
 <body>
   <div class="app">
     <aside class="sidebar">
-      <div id="home-button" class="sidebar-icon active">🏠</div>
+      <div id="home-button" class="sidebar-icon active">🐱</div>
+      <div id="cricket-button" class="sidebar-icon" title="Cricket streaming">🎾</div>
     </aside>
 
     <main class="main">
@@ -73,6 +74,7 @@
         </section>
       </section>
 
+      <section id="cricket-view" class="cricket-view"></section>
       <section id="detail-view" class="detail-view hidden"></section>
     </main>
   </div>
@@ -84,8 +86,10 @@
   </script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
   <script src="helpers.js"></script>
+  <script src="loading.js"></script>
   <script src="streaming.js"></script>
   <script src="details.js"></script>
+  <script src="cricket.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

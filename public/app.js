@@ -22,13 +22,24 @@ const rowsConfig = [
 
 async function loadRow(config) {
   const container = document.querySelector(`.cards[data-row="${config.id}"]`);
+  const rowElement = document.getElementById(config.id);
   if (!container) return;
 
   container.textContent = '';
 
+  // Add loading state to the row
+  if (rowElement && typeof window.LoadingUtils !== 'undefined') {
+    window.LoadingUtils.setRowLoading(rowElement, 6);
+  }
+
   try {
     const data = await fetchJson(config.endpoint);
     const items = (data.results || []).slice(0, 14);
+
+    // Remove loading state
+    if (rowElement && typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.removeRowLoading(rowElement);
+    }
 
     if (!items.length) {
       const empty = document.createElement('div');
@@ -45,6 +56,12 @@ async function loadRow(config) {
     }
   } catch (error) {
     console.error('Failed to load row:', config.id, error);
+    
+    // Remove loading state
+    if (rowElement && typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.removeRowLoading(rowElement);
+    }
+    
     const err = document.createElement('div');
     err.className = 'card-subtitle';
     err.textContent = 'Failed to load content.';
@@ -53,7 +70,41 @@ async function loadRow(config) {
 }
 
 async function initRows() {
-  await Promise.all(rowsConfig.map(loadRow));
+  // Show loading toast for initial page load
+  if (typeof window.LoadingUtils !== 'undefined') {
+    window.LoadingUtils.showToast(
+      'Loading content...',
+      'loading',
+      0,
+      true
+    );
+  }
+  
+  try {
+    await Promise.all(rowsConfig.map(loadRow));
+    
+    // Hide loading toast and show success
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.hideAllToasts('loading');
+      window.LoadingUtils.showToast(
+        'Content loaded successfully',
+        'success',
+        2000
+      );
+    }
+  } catch (error) {
+    console.error('Failed to initialize rows', error);
+    
+    // Hide loading toast and show error
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.hideAllToasts('loading');
+      window.LoadingUtils.showToast(
+        'Failed to load some content',
+        'error',
+        5000
+      );
+    }
+  }
 }
 
 // --- Search ---
@@ -135,14 +186,32 @@ async function performSearch(query) {
 
   const trimmed = query.trim();
 
+  // Add loading state to search results
+  if (searchResults && typeof window.LoadingUtils !== 'undefined') {
+    window.LoadingUtils.setSearchLoading(searchResults);
+    searchResults.classList.remove('hidden');
+  }
+
   try {
     const data = await fetchJson(
       `/api/search/multi?query=${encodeURIComponent(trimmed)}`
     );
     const results = (data.results || []).slice(0, 10);
+    
+    // Remove loading state
+    if (searchResults && typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.removeSearchLoading(searchResults);
+    }
+    
     renderSearchResults(results);
   } catch (error) {
     console.error('Search failed:', error);
+    
+    // Remove loading state
+    if (searchResults && typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.removeSearchLoading(searchResults);
+    }
+    
     clearSearchResults();
   }
 }
@@ -204,16 +273,9 @@ async function replayCurrentPlayback() {
   const playback = window.currentPlayback;
   if (!playback) return;
 
-  const providerLabel =
-    getCurrentProvider() === 'filmex' ? 'Filmex' : 'VidLink';
-
   const { kind, movie, tv, season, episode, videoEl, statusEl } = playback;
 
   if (!videoEl) return;
-
-  if (statusEl) {
-    statusEl.textContent = `Resolving stream via ${providerLabel}…`;
-  }
 
   try {
     if (kind === 'movie' && movie) {
@@ -232,7 +294,7 @@ function setupProviderToggle() {
   updateProviderToggleUI();
 
   providerButtons.forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', function() {
       const provider = btn.dataset.provider;
       if (!provider) return;
 

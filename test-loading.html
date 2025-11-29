@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Loading Test - CAT-alog</title>
+  <link rel="stylesheet" href="public/styles.css" />
+  <style>
+    body {
+      padding: 20px;
+      background: radial-gradient(circle at top left, #3b1d60 0, #050218 45%, #020010 100%);
+      color: #f9fafb;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .test-section {
+      margin-bottom: 30px;
+      padding: 20px;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.5);
+    }
+    .test-button {
+      margin: 5px;
+      padding: 8px 16px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: rgba(15, 23, 42, 0.9);
+      color: #e5e7eb;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .test-button:hover {
+      background: rgba(79, 70, 229, 0.85);
+    }
+    .test-container {
+      margin: 10px 0;
+      padding: 15px;
+      border: 1px dashed rgba(148, 163, 184, 0.3);
+      border-radius: 8px;
+      min-height: 50px;
+      position: relative;
+    }
+  </style>
+</head>
+<body>
+  <h1>Loading Indicators Test</h1>
+  
+  <div class="test-section">
+    <h2>Spinner Loaders</h2>
+    <button class="test-button" onclick="testSpinner('small')">Small Spinner</button>
+    <button class="test-button" onclick="testSpinner('medium')">Medium Spinner</button>
+    <button class="test-button" onclick="testSpinner('large')">Large Spinner</button>
+    <div id="spinner-test" class="test-container"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>Pulse Loaders</h2>
+    <button class="test-button" onclick="testPulse('small')">Small Pulse</button>
+    <button class="test-button" onclick="testPulse('medium')">Medium Pulse</button>
+    <div id="pulse-test" class="test-container"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>Dots Loader</h2>
+    <button class="test-button" onclick="testDots()">Show Dots</button>
+    <div id="dots-test" class="test-container"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>Skeleton Loaders</h2>
+    <button class="test-button" onclick="testSkeleton('text')">Text Skeleton</button>
+    <button class="test-button" onclick="testSkeleton('title')">Title Skeleton</button>
+    <button class="test-button" onclick="testSkeleton('card')">Card Skeleton</button>
+    <div id="skeleton-test" class="test-container"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>Loading Overlays</h2>
+    <button class="test-button" onclick="testLoadingOverlay()">Show Loading Overlay</button>
+    <button class="test-button" onclick="testVideoLoadingOverlay()">Show Video Loading Overlay</button>
+    <div id="overlay-test" class="test-container" style="height: 200px;"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>Status with Loader</h2>
+    <button class="test-button" onclick="testStatusWithLoader()">Show Status with Loader</button>
+    <div id="status-test" class="test-container"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>Toast Notifications</h2>
+    <button class="test-button" onclick="testToast('loading')">Loading Toast</button>
+    <button class="test-button" onclick="testToast('success')">Success Toast</button>
+    <button class="test-button" onclick="testToast('error')">Error Toast</button>
+  </div>
+
+  <div class="test-section">
+    <h2>Button Loading States</h2>
+    <button class="test-button" id="button-test" onclick="testButtonLoading()">Test Button Loading</button>
+  </div>
+
+  <div class="test-section">
+    <h2>Progress Bar</h2>
+    <button class="test-button" onclick="testProgressBar()">Show Progress Bar</button>
+    <div id="progress-test" class="test-container"></div>
+  </div>
+
+  <script src="public/loading.js"></script>
+  <script>
+    function testSpinner(size) {
+      const container = document.getElementById('spinner-test');
+      container.innerHTML = '';
+      const spinner = window.LoadingUtils.createSpinner(size);
+      container.appendChild(spinner);
+    }
+
+    function testPulse(size) {
+      const container = document.getElementById('pulse-test');
+      container.innerHTML = '';
+      const pulse = window.LoadingUtils.createPulseLoader(size);
+      container.appendChild(pulse);
+    }
+
+    function testDots() {
+      const container = document.getElementById('dots-test');
+      container.innerHTML = '';
+      const dots = window.LoadingUtils.createDotsLoader();
+      container.appendChild(dots);
+    }
+
+    function testSkeleton(type) {
+      const container = document.getElementById('skeleton-test');
+      container.innerHTML = '';
+      const skeleton = window.LoadingUtils.createSkeleton(type);
+      container.appendChild(skeleton);
+    }
+
+    function testLoadingOverlay() {
+      const container = document.getElementById('overlay-test');
+      container.innerHTML = '';
+      const overlay = window.LoadingUtils.createLoadingOverlay('Loading content...', 'spinner');
+      container.appendChild(overlay);
+    }
+
+    function testVideoLoadingOverlay() {
+      const container = document.getElementById('overlay-test');
+      container.innerHTML = '';
+      const overlay = window.LoadingUtils.createVideoLoadingOverlay('Loading video...');
+      container.appendChild(overlay);
+    }
+
+    function testStatusWithLoader() {
+      const container = document.getElementById('status-test');
+      container.innerHTML = '';
+      const status = window.LoadingUtils.createStatusWithLoader('Processing request...', 'spinner');
+      container.appendChild(status);
+    }
+
+    function testToast(type) {
+      const messages = {
+        loading: 'Loading content...',
+        success: 'Operation completed successfully!',
+        error: 'An error occurred while processing your request.'
+      };
+      window.LoadingUtils.showToast(messages[type], type, type === 'loading' ? 0 : 3000, type === 'loading');
+    }
+
+    function testButtonLoading() {
+      const button = document.getElementById('button-test');
+      if (button.classList.contains('button--loading')) {
+        window.LoadingUtils.removeButtonLoading(button);
+        button.textContent = 'Test Button Loading';
+      } else {
+        window.LoadingUtils.setButtonLoading(button, 'Test Button Loading');
+      }
+    }
+
+    function testProgressBar() {
+      const container = document.getElementById('progress-test');
+      container.innerHTML = '';
+      const progressBar = window.LoadingUtils.createProgressBar(0);
+      container.appendChild(progressBar);
+
+      // Animate progress
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 10;
+        window.LoadingUtils.updateProgressBar(progressBar, progress);
+        if (progress >= 100) {
+          clearInterval(interval);
+        }
+      }, 200);
+    }
+
+    // Test if LoadingUtils is available
+    window.addEventListener('DOMContentLoaded', () => {
+      if (typeof window.LoadingUtils !== 'undefined') {
+        console.log('✅ LoadingUtils is available');
+        console.log('Available functions:', Object.keys(window.LoadingUtils));
+      } else {
+        console.error('❌ LoadingUtils is not available');
+      }
+    });
+  </script>
+</body>
+</html>

@@ -189,6 +189,89 @@ async function loadStreamIntoVideo(params, videoEl) {
 }
 
 /**
+ * Attach an already-resolved external stream URL (for example, from the
+ * /v3/cricket/match/streams endpoint) to a <video> element. Uses Hls.js
+ * when appropriate and falls back to direct MP4 playback.
+ *
+ * @param {{ url: string, format?: string }} stream
+ * @param {HTMLVideoElement} videoEl
+ * @param {HTMLElement} [statusEl]
+ */
+async function attachExternalStreamToVideo(stream, videoEl, statusEl) {
+  if (!videoEl || !stream || !stream.url) {
+    if (statusEl) {
+      statusEl.textContent = 'Stream is not available.';
+    }
+    return;
+  }
+
+  const url = stream.url;
+  let format = (stream.format || '').toLowerCase();
+
+  // Try to infer format from URL when not provided.
+  if (!format) {
+    if (/\.m3u8($|\?)/i.test(url)) {
+      format = 'hls';
+    } else if (/\.mp4($|\?)/i.test(url)) {
+      format = 'mp4';
+    } else {
+      format = 'unknown';
+    }
+  }
+
+  if (statusEl) {
+    statusEl.textContent = 'Loading stream…';
+  }
+
+  // Reset any existing source and Hls.js instance.
+  cleanupHls();
+  videoEl.pause();
+  videoEl.removeAttribute('src');
+  videoEl.load();
+
+  const HlsConstructor = typeof window !== 'undefined' ? window.Hls : null;
+
+  try {
+    const isHlsFormat =
+      format === 'hls' || /\.m3u8($|\?)/i.test(url);
+
+    if (isHlsFormat) {
+      if (HlsConstructor && HlsConstructor.isSupported && HlsConstructor.isSupported()) {
+        const hls = new HlsConstructor();
+        currentHlsInstance = hls;
+        hls.loadSource(url);
+        hls.attachMedia(videoEl);
+        hls.on(HlsConstructor.Events.MANIFEST_PARSED, () => {
+          videoEl.play().catch(() => {});
+        });
+      } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+        videoEl.src = url;
+        videoEl.play().catch(() => {});
+      } else {
+        throw new Error('HLS playback is not supported in this browser.');
+      }
+    } else {
+      // Treat as direct file (MP4 or similar).
+      videoEl.src = url;
+      videoEl.play().catch(() => {});
+    }
+
+    videoEl.dataset.provider = stream.provider || 'cricket';
+
+    if (statusEl) {
+      statusEl.textContent = '';
+    }
+  } catch (error) {
+    console.error('Failed to attach external stream', error);
+    if (statusEl) {
+      statusEl.textContent =
+        error && error.message ? error.message : 'Failed to start playback.';
+    }
+    throw error;
+  }
+}
+
+/**
  * Convenience wrapper for starting movie playback given a TMDB movie object.
  */
 async function startMoviePlayback(movie, videoEl, statusEl) {
@@ -197,8 +280,40 @@ async function startMoviePlayback(movie, videoEl, statusEl) {
   const providerLabel =
     getCurrentProvider() === 'filmex' ? 'Filmex' : 'VidLink';
 
-  if (statusEl) {
+  // Create enhanced loading state
+  if (statusEl && typeof window.LoadingUtils !== 'undefined') {
+    statusEl.innerHTML = '';
+    const statusWithLoader = window.LoadingUtils.createStatusWithLoader(
+      `Resolving stream via ${providerLabel}…`,
+      'spinner'
+    );
+    statusEl.appendChild(statusWithLoader);
+    
+    // Show toast for long loading operation
+    window.LoadingUtils.showToast(
+      `Loading "${movie.title}" via ${providerLabel}...`,
+      'loading',
+      0,
+      true
+    );
+  } else if (statusEl) {
     statusEl.textContent = `Resolving stream via ${providerLabel}…`;
+  }
+
+  // Add loading overlay to video element
+  let videoOverlay = null;
+  if (videoEl && typeof window.LoadingUtils !== 'undefined') {
+    videoEl.classList.add('video-player--loading');
+    videoOverlay = window.LoadingUtils.createVideoLoadingOverlay(
+      `Resolving stream via ${providerLabel}…`
+    );
+    
+    // Position the overlay relative to the video element
+    const videoContainer = videoEl.parentNode;
+    if (videoContainer) {
+      videoContainer.style.position = 'relative';
+      videoContainer.appendChild(videoOverlay);
+    }
   }
 
   try {
@@ -210,16 +325,64 @@ async function startMoviePlayback(movie, videoEl, statusEl) {
       },
       videoEl
     );
-    if (statusEl) {
+    
+    // Clean up loading states
+    if (statusEl && typeof window.LoadingUtils !== 'undefined') {
       statusEl.textContent = '';
+    }
+    
+    if (videoOverlay && videoOverlay.parentNode) {
+      videoOverlay.remove();
+    }
+    
+    if (videoEl) {
+      videoEl.classList.remove('video-player--loading');
+    }
+    
+    // Hide loading toast and show success
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.hideAllToasts('loading');
+      window.LoadingUtils.showToast(
+        `Successfully loaded "${movie.title}"`,
+        'success',
+        3000
+      );
     }
   } catch (error) {
     console.error('Failed to start movie playback', error);
-    if (statusEl) {
+    
+    // Clean up loading states
+    if (videoOverlay && videoOverlay.parentNode) {
+      videoOverlay.remove();
+    }
+    
+    if (videoEl) {
+      videoEl.classList.remove('video-player--loading');
+    }
+    
+    // Show error state
+    if (statusEl && typeof window.LoadingUtils !== 'undefined') {
+      statusEl.textContent = '';
+      const errorStatus = window.LoadingUtils.createStatusWithLoader(
+        error && error.message ? error.message : 'Failed to start playback.',
+        'dots'
+      );
+      statusEl.appendChild(errorStatus);
+    } else if (statusEl) {
       statusEl.textContent =
         error && error.message
           ? error.message
           : 'Failed to start playback.';
+    }
+    
+    // Hide loading toast and show error
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.hideAllToasts('loading');
+      window.LoadingUtils.showToast(
+        `Failed to load "${movie.title}"`,
+        'error',
+        5000
+      );
     }
   }
 }
@@ -232,9 +395,42 @@ async function startEpisodePlayback(tv, season, episode, videoEl, statusEl) {
 
   const providerLabel =
     getCurrentProvider() === 'filmex' ? 'Filmex' : 'VidLink';
+  const episodeTitle = episode.name || `Episode ${episode.episode_number}`;
 
-  if (statusEl) {
+  // Create enhanced loading state
+  if (statusEl && typeof window.LoadingUtils !== 'undefined') {
+    statusEl.innerHTML = '';
+    const statusWithLoader = window.LoadingUtils.createStatusWithLoader(
+      `Resolving ${episodeTitle} via ${providerLabel}…`,
+      'spinner'
+    );
+    statusEl.appendChild(statusWithLoader);
+    
+    // Show toast for long loading operation
+    window.LoadingUtils.showToast(
+      `Loading ${episodeTitle} via ${providerLabel}...`,
+      'loading',
+      0,
+      true
+    );
+  } else if (statusEl) {
     statusEl.textContent = `Resolving stream via ${providerLabel}…`;
+  }
+
+  // Add loading overlay to video element
+  let videoOverlay = null;
+  if (videoEl && typeof window.LoadingUtils !== 'undefined') {
+    videoEl.classList.add('video-player--loading');
+    videoOverlay = window.LoadingUtils.createVideoLoadingOverlay(
+      `Resolving ${episodeTitle} via ${providerLabel}…`
+    );
+    
+    // Position the overlay relative to the video element
+    const videoContainer = videoEl.parentNode;
+    if (videoContainer) {
+      videoContainer.style.position = 'relative';
+      videoContainer.appendChild(videoOverlay);
+    }
   }
 
   try {
@@ -248,16 +444,64 @@ async function startEpisodePlayback(tv, season, episode, videoEl, statusEl) {
       },
       videoEl
     );
-    if (statusEl) {
+    
+    // Clean up loading states
+    if (statusEl && typeof window.LoadingUtils !== 'undefined') {
       statusEl.textContent = '';
+    }
+    
+    if (videoOverlay && videoOverlay.parentNode) {
+      videoOverlay.remove();
+    }
+    
+    if (videoEl) {
+      videoEl.classList.remove('video-player--loading');
+    }
+    
+    // Hide loading toast and show success
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.hideAllToasts('loading');
+      window.LoadingUtils.showToast(
+        `Successfully loaded ${episodeTitle}`,
+        'success',
+        3000
+      );
     }
   } catch (error) {
     console.error('Failed to start episode playback', error);
-    if (statusEl) {
+    
+    // Clean up loading states
+    if (videoOverlay && videoOverlay.parentNode) {
+      videoOverlay.remove();
+    }
+    
+    if (videoEl) {
+      videoEl.classList.remove('video-player--loading');
+    }
+    
+    // Show error state
+    if (statusEl && typeof window.LoadingUtils !== 'undefined') {
+      statusEl.textContent = '';
+      const errorStatus = window.LoadingUtils.createStatusWithLoader(
+        error && error.message ? error.message : 'Failed to start playback.',
+        'dots'
+      );
+      statusEl.appendChild(errorStatus);
+    } else if (statusEl) {
       statusEl.textContent =
         error && error.message
           ? error.message
           : 'Failed to start playback.';
+    }
+    
+    // Hide loading toast and show error
+    if (typeof window.LoadingUtils !== 'undefined') {
+      window.LoadingUtils.hideAllToasts('loading');
+      window.LoadingUtils.showToast(
+        `Failed to load ${episodeTitle}`,
+        'error',
+        5000
+      );
     }
   }
 }
